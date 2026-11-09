@@ -2,6 +2,7 @@
 Just an expression picker for Monika After Story.
 
 It's an HTML file so it can be ran in a web browser totally fine.
+IT'S ALL VIBE CODED WITH CLAUDE AI
 
 ## Features ##
 
