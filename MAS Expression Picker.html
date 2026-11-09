@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAS Expression Picker</title>
+<style>
+  :root{
+    --bg:#f7f3ec; --card:#fffdf9; --ink:#2b2a28; --muted:#7a756c; --line:#e4ddd1;
+    --accent:#3f8f5f; --accent-soft:#e3f1e8; --pink:#e88aa0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:18px 24px 6px}
+  h1{font-size:20px;margin:0}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:16px 24px 28px;max-width:1200px}
+  @media (max-width:820px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .sticky{position:sticky;top:12px;align-self:start}
+  @media (max-width:820px){.sticky{position:static}}
+  #preview{width:100%;height:auto;display:block;border-radius:10px;background:linear-gradient(#eef6f0,#f9f6ef)}
+  .code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:1px;text-align:center;margin:12px 0 4px}
+  .desc{font-size:12.5px;color:var(--muted);text-align:center;min-height:34px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 12px}
+  button:hover{border-color:#c9bfae}
+  .primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .primary:hover{filter:brightness(1.07)}
+  .group{margin-bottom:14px}
+  .group h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 7px;display:flex;justify-content:space-between}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:6px 10px;font-size:13px;border-radius:999px;display:inline-flex;gap:6px;align-items:center}
+  .chip b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#f1ece3;border-radius:5px;padding:1px 5px}
+  .chip.on{background:var(--accent-soft);border-color:var(--accent);color:#1f5a38}
+  .chip.on b{background:#cfe8d8}
+  input[type=text],textarea,select{font:inherit;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;color:var(--ink);width:100%}
+  textarea{resize:vertical;min-height:60px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  pre.out{background:#2b2a28;color:#f1ece3;border-radius:10px;padding:12px;margin:8px 0;white-space:pre-wrap;word-break:break-word;font-size:13px;min-height:42px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:9px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .section-title{font-size:15px;margin:0 0 10px}
+  .small{font-size:12px;color:var(--muted)}
+  .presets{display:flex;flex-wrap:wrap;gap:6px}
+  .presets button{font-size:12.5px;padding:5px 9px}
+  .err{color:#b4443a;font-size:12px;min-height:16px;margin-top:4px}
+  .script-line{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+  .script-line code{flex:1;background:#f4efe6;border-radius:6px;padding:4px 8px;font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+  .script-line button{padding:2px 8px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>MAS Expression Picker</h1>
+  <p>Pick each part, check the preview, copy the sprite code (or a full <span class="mono">m 1eua "..."</span> line) into your submod.</p>
+</header>
+
+<main>
+  <!-- LEFT: preview + code -->
+  <div class="sticky">
+    <div class="card">
+      <canvas id="spriteCanvas" width="420" height="320" style="display:none"></canvas>
+      <svg id="preview" viewBox="0 0 240 240" aria-label="Expression preview"></svg>
+      <div id="spriteBar" style="margin-top:10px">
+        <label class="small" style="display:block;margin-bottom:6px" id="spriteHint">
+          Pick your <span class="mono">monika</span> sprite folder (the one with <span class="mono">b/</span> and <span class="mono">f/</span>) to preview with the real sprites. Files stay on your computer.
+        </label>
+        <div class="row">
+          <label class="primary" style="border-radius:9px;padding:7px 12px;cursor:pointer;background:var(--accent);color:#fff;font-weight:600">
+            Load sprite folder<input type="file" id="folderIn" webkitdirectory directory multiple accept="image/png" style="display:none">
+          </label>
+          <label style="border:1px solid var(--line);border-radius:9px;padding:7px 12px;cursor:pointer;background:#fff;font-size:14px">
+            or pick PNGs<input type="file" id="filesIn" multiple accept="image/png" style="display:none">
+          </label>
+        </div>
+        <div class="err" id="missing"></div>
+      </div>
+      <div class="code" id="code">1eua</div>
+      <div class="desc" id="desc"></div>
+      <div class="row" style="justify-content:center;margin-top:8px">
+        <button class="primary" id="copyCode">Copy code</button>
+        <button id="randomBtn" title="Random expression">Random</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <p class="small" style="text-align:center;margin:10px 0 0" id="previewNote">Showing a schematic stand-in until you load your sprite folder.</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2 class="section-title">Decode a code</h2>
+      <div class="row" style="flex-wrap:nowrap">
+        <input type="text" id="decodeIn" class="mono" placeholder="e.g. 1ekbsa or 3hub">
+        <button id="decodeBtn">Load</button>
+      </div>
+      <div class="err" id="decodeErr"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: pickers + dialogue -->
+  <div>
+    <div class="card">
+      <div id="pickers"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2 class="section-title">Dialogue line builder</h2>
+      <div class="row" style="flex-wrap:nowrap;align-items:flex-start">
+        <select id="speaker" style="width:auto" title="Speaker">
+          <option value="m">m</option>
+          <option value="extend">extend</option>
+        </select>
+        <textarea id="lineText" placeholder="Type what Monika says… (use [player] for the player's name)"></textarea>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="small"><input type="checkbox" id="indent" checked> indent 4 spaces</label>
+        <label class="small"><input type="checkbox" id="fastFlag"> add <span class="mono">{fast}</span> (for extend)</label>
+      </div>
+      <pre class="out mono" id="lineOut"></pre>
+      <div class="row">
+        <button class="primary" id="copyLine">Copy line</button>
+        <button id="addLine">Add to script ↓</button>
+      </div>
+
+      <h3 class="section-title" style="margin-top:18px">Script</h3>
+      <div id="scriptList" class="small">No lines yet. Use “Add to script” to build a whole dialogue, then copy it all at once.</div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="copyScript">Copy whole script</button>
+        <button id="clearScript">Clear</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2 class="section-title">Common expressions</h2>
+      <div class="presets" id="presets"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+// ---------- Sprite code data (from MAS sprite-chart.rpy) ----------
+const POSES = [
+  ["1","resting on hands"],["2","arms crossed"],["3","rest left, point right"],
+  ["4","pointing right"],["5","leaning"],["6","arms down"],["7","down left, point right"]
+];
+const EYES = [
+  ["e","normal"],["w","wide"],["s","sparkly"],["t","smug"],["c","crazy"],
+  ["r","look right"],["l","look left"],["h","closed happy"],["d","closed sad"],
+  ["k","wink left"],["n","wink right"],["f","soft"],["m","smug left"],["g","smug right"]
+];
+const BROWS = [["u","up"],["s","straight"],["k","knit / worried"],["f","furrowed / angry"],["t","thinking"]];
+const BLUSH = [["","none"],["bl","lines"],["bs","shade"],["bf","full"]];
+const TEARS = [["","none"],["ts","streaming"],["td","dried"],["tp","pooled"],["tu","single stream"]];
+const SWEAT = [["","none"],["sdl","left drop"],["sdr","right drop"]];
+const EMOTE = [["","none"],["ec","confused"]];
+const MOUTH = [
+  ["a","smile"],["b","big"],["c","small"],["d","smirk"],["o","gasp"],["u","smug"],
+  ["w","wide"],["x","angry"],["p","pout"],["t","triangle"],["g","disgust"]
+];
+const GROUPS = [
+  {key:"pose", label:"Pose", list:POSES},
+  {key:"eyes", label:"Eyes", list:EYES},
+  {key:"brows", label:"Eyebrows", list:BROWS},
+  {key:"blush", label:"Blush (optional)", list:BLUSH},
+  {key:"tears", label:"Tears (optional)", list:TEARS},
+  {key:"sweat", label:"Sweat (optional)", list:SWEAT},
+  {key:"emote", label:"Emote (optional)", list:EMOTE},
+  {key:"mouth", label:"Mouth", list:MOUTH},
+];
+const DEFAULT = {pose:"1",eyes:"e",brows:"u",blush:"",tears:"",sweat:"",emote:"",mouth:"a"};
+let state = {...DEFAULT};
+
+const PRESETS = [
+  ["1eua","neutral smile"],["1hua","happy"],["1hub","laughing"],["1eka","gentle"],
+  ["1ekc","concerned"],["1rksdla","nervous"],["1ekbsa","blushing"],["1hubsa","happy blush"],
+  ["3eub","explaining"],["4eub","pointing"],["2esc","arms crossed, neutral"],["1euc","listening"],
+  ["1ltc","thinking"],["1tku","smug"],["1efc","annoyed"],["1wuo","surprised"],
+  ["1dkc","sad"],["1ektpc","teary"],["5eua","leaning smile"],["6hub","cheerful"]
+];
+
+// ---------- Code build / parse ----------
+function buildCode(s){ return s.pose+s.eyes+s.brows+s.blush+s.tears+s.sweat+s.emote+s.mouth; }
+function nameOf(list,c){ const f=list.find(x=>x[0]===c); return f?f[1]:c; }
+function describe(s){
+  const parts=[nameOf(POSES,s.pose), nameOf(EYES,s.eyes)+" eyes", nameOf(BROWS,s.brows)+" brows"];
+  if(s.blush) parts.push(nameOf(BLUSH,s.blush)+" blush");
+  if(s.tears) parts.push(nameOf(TEARS,s.tears)+" tears");
+  if(s.sweat) parts.push(nameOf(SWEAT,s.sweat)+" sweat");
+  if(s.emote) parts.push(nameOf(EMOTE,s.emote));
+  parts.push(nameOf(MOUTH,s.mouth)+" mouth");
+  return parts.join(" · ");
+}
+function parseCode(raw){
+  let c=(raw||"").trim().replace(/^m\s+/,"").split(/\s/)[0];
+  if(c.length<4) throw "Too short: a code needs at least pose + eyes + brows + mouth.";
+  const s={...DEFAULT,blush:"",tears:"",sweat:"",emote:""};
+  if(!POSES.some(p=>p[0]===c[0])) throw `Unknown pose "${c[0]}".`;
+  s.pose=c[0];
+  if(!EYES.some(p=>p[0]===c[1])) throw `Unknown eyes "${c[1]}".`;
+  s.eyes=c[1];
+  if(!BROWS.some(p=>p[0]===c[2])) throw `Unknown eyebrows "${c[2]}".`;
+  s.brows=c[2];
+  let rest=c.slice(3);
+  const mouth=rest.slice(-1); rest=rest.slice(0,-1);
+  if(!MOUTH.some(p=>p[0]===mouth)) throw `Unknown mouth "${mouth}".`;
+  s.mouth=mouth;
+  const opt=[["blush",BLUSH],["tears",TEARS],["sweat",SWEAT],["emote",EMOTE]];
+  rest=rest.replace(/^ebd/,"").replace(/^nd/,""); // eyebags / nose defaults, ignored
+  while(rest.length){
+    let hit=false;
+    for(const [k,list] of opt){
+      for(const [v] of list){ if(v && rest.startsWith(v)){ s[k]=v; rest=rest.slice(v.length); hit=true; break; } }
+      if(hit) break;
+    }
+    if(!hit) throw `Couldn't read "${rest}" (expected blush, tears, sweat or emote).`;
+  }
+  return s;
+}
+
+// ---------- Pickers UI ----------
+const pickers=document.getElementById("pickers");
+function renderPickers(){
+  pickers.innerHTML="";
+  for(const g of GROUPS){
+    const wrap=document.createElement("div"); wrap.className="group";
+    const h=document.createElement("h3");
+    h.innerHTML=`<span>${g.label}</span><span class="mono">${state[g.key]||"—"}</span>`;
+    wrap.appendChild(h);
+    const chips=document.createElement("div"); chips.className="chips";
+    for(const [code,name] of g.list){
+      const b=document.createElement("button");
+      b.className="chip"+(state[g.key]===code?" on":"");
+      b.innerHTML=(code?`<b>${code}</b>`:"")+name;
+      b.onclick=()=>{ state[g.key]=code; update(); };
+      chips.appendChild(b);
+    }
+    wrap.appendChild(chips); pickers.appendChild(wrap);
+  }
+}
+
+// ---------- Schematic preview (generic face, not the game art) ----------
+const SKIN="#fbe3d3", STROKE="#4a3b36", IRIS="#6b7f8f";
+function eyeSVG(cx,cy,type,side){ // side: -1 viewer-left, +1 viewer-right
+  // Monika's left eye is on the viewer's right.
+  const closedHappy=`<path d="M${cx-13} ${cy+3} Q${cx} ${cy-9} ${cx+13} ${cy+3}" fill="none" stroke="${STROKE}" stroke-width="3" stroke-linecap="round"/>`;
+  const closedSad=`<path d="M${cx-13} ${cy-1} Q${cx} ${cy+8} ${cx+13} ${cy-1}" fill="none" stroke="${STROKE}" stroke-width="3" stroke-linecap="round"/>`;
+  if(type==="h") return closedHappy;
+  if(type==="d") return closedSad;
+  if(type==="k" && side===1) return closedHappy;
+  if(type==="n" && side===-1) return closedHappy;
+  let rx=13, ry=15, pupilR=7, dx=0, lid=0, hl="dot";
+  switch(type){
+    case "w": ry=17; rx=14; pupilR=5; break;
+    case "s": hl="star"; break;
+    case "t": lid=0.5; break;
+    case "c": ry=17; rx=14; pupilR=2.5; hl="none"; break;
+    case "r": dx=-5; break;          // her right = viewer's left
+    case "l": dx=5; break;
+    case "f": lid=0.3; break;
+    case "m": lid=0.5; dx=5; break;
+    case "g": lid=0.5; dx=-5; break;
+  }
+  const id="clip"+side;
+  let out=`<defs><clipPath id="${id}"><ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/></clipPath></defs>`;
+  out+=`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#fff" stroke="${STROKE}" stroke-width="2"/>`;
+  out+=`<g clip-path="url(#${id})">`;
+  out+=`<circle cx="${cx+dx}" cy="${cy+2}" r="${type==="c"?6:10}" fill="${IRIS}"/>`;
+  out+=`<circle cx="${cx+dx}" cy="${cy+2}" r="${pupilR}" fill="#1f2328"/>`;
+  if(hl==="dot") out+=`<circle cx="${cx+dx-3}" cy="${cy-3}" r="2.6" fill="#fff"/>`;
+  if(hl==="star") out+=star(cx+dx-3,cy-3,5)+star(cx+dx+4,cy+5,2.5);
+  if(lid>0){ const top=cy-ry, h=ry*2*lid; out+=`<rect x="${cx-rx-2}" y="${top-2}" width="${rx*2+4}" height="${h+2}" fill="${SKIN}"/>`;
+    out+=`<line x1="${cx-rx}" y1="${top+h}" x2="${cx+rx}" y2="${top+h}" stroke="${STROKE}" stroke-width="2.6"/>`; }
+  out+=`</g>`;
+  if(lid===0) out+=`<path d="M${cx-rx-1} ${cy-ry+5} Q${cx} ${cy-ry-5} ${cx+rx+1} ${cy-ry+5}" fill="none" stroke="${STROKE}" stroke-width="3.2" stroke-linecap="round"/>`;
+  return out;
+}
+function star(x,y,r){
+  let p=""; for(let i=0;i<8;i++){ const a=Math.PI/4*i, rr=i%2?r*0.35:r; p+=(i?"L":"M")+(x+Math.sin(a)*rr).toFixed(1)+" "+(y-Math.cos(a)*rr).toFixed(1); }
+  return `<path d="${p}Z" fill="#fff"/>`;
+}
+function browSVG(type){
+  const L=[78,88], R=[162,88]; let a,b; // a: viewer-left brow, b: viewer-right brow
+  const line=(x1,y1,x2,y2,q)=>`<path d="M${x1} ${y1} Q${(x1+x2)/2} ${q} ${x2} ${y2}" fill="none" stroke="${STROKE}" stroke-width="3.4" stroke-linecap="round"/>`;
+  switch(type){
+    case "u": a=line(64,84,94,82,74); b=line(146,82,176,84,74); break;
+    case "s": a=line(64,85,94,85,83); b=line(146,85,176,85,83); break;
+    case "k": a=line(64,88,94,79,83); b=line(146,79,176,88,83); break;
+    case "f": a=line(64,80,94,90,84); b=line(146,90,176,80,84); break;
+    case "t": a=line(64,80,94,78,72); b=line(146,86,176,87,85); break;
+  }
+  return a+b;
+}
+function mouthSVG(type){
+  const cx=120, cy=158, S=`stroke="${STROKE}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
+  const fillM="#b5525f";
+  switch(type){
+    case "a": return `<path d="M${cx-14} ${cy-2} Q${cx} ${cy+9} ${cx+14} ${cy-2}" fill="none" ${S}/>`;
+    case "b": return `<path d="M${cx-15} ${cy-4} L${cx+15} ${cy-4} Q${cx+12} ${cy+14} ${cx} ${cy+14} Q${cx-12} ${cy+14} ${cx-15} ${cy-4}Z" fill="${fillM}" ${S}/>`;
+    case "c": return `<line x1="${cx-11}" y1="${cy}" x2="${cx+11}" y2="${cy}" ${S}/>`;
+    case "d": return `<ellipse cx="${cx}" cy="${cy+2}" rx="7" ry="6" fill="${fillM}" ${S}/>`;
+    case "o": return `<ellipse cx="${cx}" cy="${cy+3}" rx="8" ry="10" fill="${fillM}" ${S}/>`;
+    case "u": return `<path d="M${cx-12} ${cy+1} Q${cx+2} ${cy+6} ${cx+13} ${cy-5}" fill="none" ${S}/>`;
+    case "w": return `<path d="M${cx-17} ${cy-5} L${cx+17} ${cy-5} Q${cx+15} ${cy+18} ${cx} ${cy+18} Q${cx-15} ${cy+18} ${cx-17} ${cy-5}Z" fill="${fillM}" ${S}/>`;
+    case "x": return `<path d="M${cx-14} ${cy+5} Q${cx} ${cy-6} ${cx+14} ${cy+5}" fill="none" ${S}/><path d="M${cx-9} ${cy+1} L${cx+9} ${cy+1}" stroke="#fff" stroke-width="2"/>`;
+    case "p": return `<path d="M${cx-7} ${cy} Q${cx} ${cy-4} ${cx+7} ${cy}" fill="none" ${S}/><ellipse cx="${cx+40}" cy="${cy-14}" rx="12" ry="9" fill="#f6c7c0" opacity=".7"/>`;
+    case "t": return `<path d="M${cx-9} ${cy-4} L${cx+9} ${cy-4} L${cx} ${cy+8}Z" fill="${fillM}" ${S}/>`;
+    case "g": return `<path d="M${cx-14} ${cy+2} Q${cx-7} ${cy-4} ${cx} ${cy+2} Q${cx+7} ${cy+7} ${cx+14} ${cy-1}" fill="none" ${S}/>`;
+  }
+  return "";
+}
+function extrasSVG(s){
+  let out="";
+  if(s.blush==="bs"||s.blush==="bf") out+=`<ellipse cx="76" cy="132" rx="16" ry="8" fill="#f2a3a8" opacity=".55"/><ellipse cx="164" cy="132" rx="16" ry="8" fill="#f2a3a8" opacity=".55"/>`;
+  if(s.blush==="bl"||s.blush==="bf"){ for(const x of [68,76,84]) out+=`<line x1="${x}" y1="136" x2="${x+5}" y2="127" stroke="#d9707a" stroke-width="2" stroke-linecap="round"/>`;
+    for(const x of [156,164,172]) out+=`<line x1="${x}" y1="136" x2="${x+5}" y2="127" stroke="#d9707a" stroke-width="2" stroke-linecap="round"/>`; }
+  const tearC="#7cc3ee";
+  if(s.tears==="ts"){ for(const x of [72,88,152,168]) out+=`<path d="M${x} 116 Q${x-2} 140 ${x+1} 170" fill="none" stroke="${tearC}" stroke-width="4" stroke-linecap="round" opacity=".85"/>`; }
+  if(s.tears==="tu"){ for(const x of [80,160]) out+=`<path d="M${x} 116 Q${x-2} 140 ${x+1} 168" fill="none" stroke="${tearC}" stroke-width="4" stroke-linecap="round" opacity=".85"/>`; }
+  if(s.tears==="td"){ for(const x of [80,160]) out+=`<path d="M${x} 118 Q${x-2} 138 ${x+1} 156" fill="none" stroke="${tearC}" stroke-width="2.5" stroke-linecap="round" opacity=".4"/>`;
+    out+=`<ellipse cx="80" cy="117" rx="14" ry="3" fill="#f0a2a2" opacity=".5"/><ellipse cx="160" cy="117" rx="14" ry="3" fill="#f0a2a2" opacity=".5"/>`; }
+  if(s.tears==="tp"){ out+=`<path d="M67 112 Q80 122 93 112" fill="none" stroke="${tearC}" stroke-width="4" stroke-linecap="round" opacity=".85"/><path d="M147 112 Q160 122 173 112" fill="none" stroke="${tearC}" stroke-width="4" stroke-linecap="round" opacity=".85"/>`; }
+  const drop=(x,y)=>`<path d="M${x} ${y} Q${x+9} ${y+14} ${x} ${y+19} Q${x-9} ${y+14} ${x} ${y}Z" fill="#bfe3f7" stroke="#6aa9cf" stroke-width="1.5"/>`;
+  if(s.sweat==="sdl") out+=drop(190,70);   // her left = viewer's right
+  if(s.sweat==="sdr") out+=drop(50,70);
+  if(s.emote==="ec") out+=`<path d="M196 36 q8 -8 14 0 q6 8 -4 13 q-5 3 -5 9" fill="none" stroke="${STROKE}" stroke-width="3" stroke-linecap="round"/><circle cx="201" cy="66" r="2.2" fill="${STROKE}"/>`;
+  return out;
+}
+function poseSVG(p){
+  // small pictogram of the arms, below the face
+  const S=`stroke="#9a8f80" stroke-width="5" stroke-linecap="round" fill="none"`;
+  const base=`<path d="M70 240 Q72 206 120 202 Q168 206 170 240" fill="#e9e1d4"/>`;
+  const m={
+    "1":`<path d="M78 236 L102 214 L120 206" ${S}/><path d="M162 236 L138 214 L120 206" ${S}/>`,
+    "2":`<path d="M80 224 L160 216" ${S}/><path d="M160 226 L80 216" ${S}/>`,
+    "3":`<path d="M78 236 L102 218 L118 214" ${S}/><path d="M164 234 L196 214" ${S}/><circle cx="198" cy="212" r="3" fill="#9a8f80"/>`,
+    "4":`<path d="M78 238 L72 222" ${S}/><path d="M164 234 L196 214" ${S}/><circle cx="198" cy="212" r="3" fill="#9a8f80"/>`,
+    "5":`<path d="M74 236 L112 226" ${S}/><path d="M166 236 L128 226" ${S}/>`,
+    "6":`<path d="M76 222 L72 240" ${S}/><path d="M164 222 L168 240" ${S}/>`,
+    "7":`<path d="M76 222 L72 240" ${S}/><path d="M164 234 L196 214" ${S}/><circle cx="198" cy="212" r="3" fill="#9a8f80"/>`
+  };
+  return base+(m[p]||"");
+}
+function renderPreview(s){
+  const lean = s.pose==="5";
+  const head = `<g transform="${lean?"translate(0,10) rotate(-4 120 120)":""}">
+    <ellipse cx="120" cy="118" rx="74" ry="80" fill="${SKIN}" stroke="${STROKE}" stroke-width="2"/>
+    ${extrasSVG({...s,tears:"",sweat:"",emote:""})}
+    ${browSVG(s.brows)}
+    ${eyeSVG(80,104,s.eyes,-1)}
+    ${eyeSVG(160,104,s.eyes,1)}
+    <path d="M118 130 l3 4" stroke="${STROKE}" stroke-width="2" stroke-linecap="round"/>
+    ${mouthSVG(s.mouth)}
+    ${extrasSVG({...s,blush:""})}
+  </g>`;
+  document.getElementById("preview").innerHTML = poseSVG(s.pose) + head;
+}
+
+// ---------- Real sprites from the user's own folder ----------
+// All MAS layers share one 1280x850 canvas, so they stack directly.
+const FILES = new Map();   // file name -> File
+const IMGS = new Map();    // file name -> Promise<HTMLImageElement>
+const EYE_FILE = {e:"normal",w:"wide",s:"sparkle",t:"smug",c:"crazy",r:"right",l:"left",h:"closedhappy",
+  d:"closedsad",k:"winkleft",n:"winkright",f:"soft",m:"smugleft",g:"smugright"};
+const BROW_FILE = {u:"up",s:"mid",k:"knit",f:"furrowed",t:"think"};
+const MOUTH_FILE = {a:"smile",b:"big",c:"small",d:"smirk",o:"gasp",u:"smug",w:"wide",x:"angry",p:"pout",t:"triangle",g:"disgust"};
+const BLUSH_FILE = {bl:"lines",bs:"shade",bf:"full"};
+const TEARS_FILE = {ts:"streaming",tu:"up",tp:"pooled",td:"dried"};
+const TEAR_EYE_VARIANT = {h:"closedhappy",d:"closedsad",k:"winkleft",n:"winkright"};
+const SWEAT_FILE = {sdl:"def",sdr:"right"};
+// crop boxes (x, y, w, h) around the head, in sprite pixels
+const CROP_UP = [470,150,420,320], CROP_LEAN = [540,190,420,320];
+
+function spriteLayers(s){
+  const lean = s.pose==="5";
+  const P = lean ? "face-leaning-def-" : "face-";
+  const L = lean ? ["body-leaning-def-0.png","body-leaning-def-head.png"] : ["body-def-0.png","body-def-head.png"];
+  if(s.blush) L.push(P+"blush-"+BLUSH_FILE[s.blush]+".png");
+  L.push(P+"nose-def.png");
+  L.push(P+"eyes-"+EYE_FILE[s.eyes]+".png");
+  if(s.tears){
+    const base = TEARS_FILE[s.tears], v = TEAR_EYE_VARIANT[s.eyes];
+    const variant = v ? P+"tears-"+base+v+".png" : null;
+    L.push(variant && FILES.has(variant) ? variant : P+"tears-"+base+".png");
+  }
+  L.push(P+"eyebrows-"+BROW_FILE[s.brows]+".png");
+  L.push(P+"mouth-"+MOUTH_FILE[s.mouth]+".png");
+  if(s.sweat) L.push(P+"sweatdrop-"+SWEAT_FILE[s.sweat]+".png");
+  if(s.emote) L.push(P+"emote-confuse.png");
+  return L;
+}
+function getImg(name){
+  if(!IMGS.has(name)){
+    IMGS.set(name, new Promise((res,rej)=>{
+      const img=new Image(); img.onload=()=>res(img); img.onerror=rej;
+      img.src=URL.createObjectURL(FILES.get(name));
+    }));
+  }
+  return IMGS.get(name);
+}
+let drawToken=0;
+async function renderSprite(s){
+  const token=++drawToken;
+  const names=spriteLayers(s);
+  const missing=names.filter(n=>!FILES.has(n));
+  document.getElementById("missing").textContent = missing.length ? "Missing in your folder: "+missing.join(", ") : "";
+  let imgs;
+  try{ imgs = await Promise.all(names.filter(n=>FILES.has(n)).map(getImg)); }
+  catch(e){ document.getElementById("missing").textContent="Couldn't read one of the images."; return; }
+  if(token!==drawToken) return; // a newer selection is drawing
+  const cv=document.getElementById("spriteCanvas"), ctx=cv.getContext("2d");
+  const [x,y,w,h] = s.pose==="5" ? CROP_LEAN : CROP_UP;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  for(const img of imgs) ctx.drawImage(img,x,y,w,h,0,0,cv.width,cv.height);
+}
+function loadFiles(list){
+  let n=0;
+  for(const f of list){ if(/\.png$/i.test(f.name)){ FILES.set(f.name,f); IMGS.delete(f.name); n++; } }
+  if(!n){ document.getElementById("missing").textContent="No PNG files found there."; return; }
+  const cv=document.getElementById("spriteCanvas");
+  cv.style.display="block"; cv.style.width="100%"; cv.style.borderRadius="10px";
+  cv.style.background="linear-gradient(#eef6f0,#f9f6ef)";
+  document.getElementById("preview").style.display="none";
+  document.getElementById("spriteHint").textContent=`Loaded ${FILES.size} sprite files. Pick the folder again to reload after editing them.`;
+  document.getElementById("previewNote").textContent="Face close-up from your sprites. Pose changes the framing only (upright vs. leaning).";
+  update();
+}
+document.getElementById("folderIn").addEventListener("change",e=>loadFiles(e.target.files));
+document.getElementById("filesIn").addEventListener("change",e=>loadFiles(e.target.files));
+
+// ---------- Dialogue builder ----------
+const lineText=document.getElementById("lineText"), speaker=document.getElementById("speaker");
+const indent=document.getElementById("indent"), fastFlag=document.getElementById("fastFlag");
+let script=[];
+function escapeLine(t){ return t.replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g," "); }
+function buildLine(){
+  const pad = indent.checked ? "    " : "";
+  let text = escapeLine(lineText.value || "...");
+  if(speaker.value==="extend" && fastFlag.checked && !text.startsWith("{fast}")) text="{fast}"+text;
+  const who = speaker.value==="extend" ? "extend" : `m ${buildCode(state)}`;
+  return `${pad}${who} "${text}"`;
+}
+function renderLine(){ document.getElementById("lineOut").textContent = buildLine(); }
+function renderScript(){
+  const el=document.getElementById("scriptList");
+  if(!script.length){ el.innerHTML="No lines yet. Use “Add to script” to build a whole dialogue, then copy it all at once."; return; }
+  el.innerHTML="";
+  script.forEach((l,i)=>{
+    const row=document.createElement("div"); row.className="script-line";
+    const c=document.createElement("code"); c.className="mono"; c.textContent=l;
+    const up=document.createElement("button"); up.textContent="↑"; up.title="Move up"; up.disabled=i===0;
+    up.onclick=()=>{ [script[i-1],script[i]]=[script[i],script[i-1]]; renderScript(); save(); };
+    const del=document.createElement("button"); del.textContent="✕"; del.title="Remove";
+    del.onclick=()=>{ script.splice(i,1); renderScript(); save(); };
+    row.append(c,up,del); el.appendChild(row);
+  });
+}
+
+// ---------- Copy helper ----------
+const toast=document.getElementById("toast");
+function flash(msg){ toast.textContent=msg; toast.classList.add("show"); clearTimeout(flash.t); flash.t=setTimeout(()=>toast.classList.remove("show"),1300); }
+async function copy(text,msg){
+  try{ await navigator.clipboard.writeText(text); flash(msg||"Copied!"); return; }catch(e){}
+  try{
+    const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); ta.remove();
+    flash(ok?(msg||"Copied!"):"Select the text and press Ctrl+C");
+  }catch(e){ flash("Select the text and press Ctrl+C"); }
+}
+
+// ---------- Persistence (light, per-browser) ----------
+function save(){ try{ localStorage.setItem("masExpr", JSON.stringify({state,script})); }catch(e){} }
+function load(){ try{ const d=JSON.parse(localStorage.getItem("masExpr")||"null"); if(d){ state={...DEFAULT,...d.state}; script=d.script||[]; } }catch(e){} }
+
+// ---------- Wire up ----------
+function update(){
+  document.getElementById("code").textContent=buildCode(state);
+  document.getElementById("desc").textContent=describe(state);
+  renderPickers(); renderPreview(state); if(FILES.size) renderSprite(state); renderLine(); save();
+}
+document.getElementById("copyCode").onclick=()=>copy(buildCode(state),"Code copied: "+buildCode(state));
+document.getElementById("copyLine").onclick=()=>copy(buildLine(),"Line copied");
+document.getElementById("addLine").onclick=()=>{ script.push(buildLine()); renderScript(); save(); lineText.value=""; renderLine(); lineText.focus(); };
+document.getElementById("copyScript").onclick=()=>{ if(!script.length){flash("Script is empty");return;} copy(script.join("\n"),"Script copied ("+script.length+" lines)"); };
+document.getElementById("clearScript").onclick=()=>{ script=[]; renderScript(); save(); };
+document.getElementById("resetBtn").onclick=()=>{ state={...DEFAULT}; update(); };
+document.getElementById("randomBtn").onclick=()=>{
+  const pick=l=>l[Math.floor(Math.random()*l.length)][0];
+  state={pose:pick(POSES),eyes:pick(EYES),brows:pick(BROWS),
+    blush:Math.random()<.25?pick(BLUSH.slice(1)):"", tears:Math.random()<.12?pick(TEARS.slice(1)):"",
+    sweat:Math.random()<.12?pick(SWEAT.slice(1)):"", emote:"", mouth:pick(MOUTH)};
+  update();
+};
+function doDecode(){
+  const err=document.getElementById("decodeErr");
+  try{ state=parseCode(document.getElementById("decodeIn").value); err.textContent=""; update(); }
+  catch(e){ err.textContent=e; }
+}
+document.getElementById("decodeBtn").onclick=doDecode;
+document.getElementById("decodeIn").addEventListener("keydown",e=>{ if(e.key==="Enter") doDecode(); });
+[lineText,speaker,indent,fastFlag].forEach(el=>el.addEventListener("input",renderLine));
+speaker.addEventListener("change",renderLine);
+
+const presetsEl=document.getElementById("presets");
+for(const [c,n] of PRESETS){
+  const b=document.createElement("button"); b.innerHTML=`<span class="mono"><b>${c}</b></span> ${n}`;
+  b.onclick=()=>{ try{ state=parseCode(c); update(); }catch(e){} };
+  presetsEl.appendChild(b);
+}
+
+load(); update(); renderScript();
+</script>
+</body>
+</html>
